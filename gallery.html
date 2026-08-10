@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Photobooth Photos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#3a3226; --olive:#7c8a5c; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ min-height:100%; font-family:'Poppins', sans-serif; color:var(--ink); }
+  body{
+    background:linear-gradient(135deg,#f9d6e0 0%,#f9d6e0 40%,#f8dcc0 100%);
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:24px; text-align:center;
+  }
+  .card{
+    background:#fff; border-radius:20px; padding:28px 24px;
+    box-shadow:0 14px 30px rgba(0,0,0,.16);
+    max-width:420px; width:100%;
+  }
+  h1{ font-family:'Baloo 2', cursive; font-size:24px; margin-bottom:6px; }
+  p{ font-size:14px; color:#7a7062; margin-bottom:18px; }
+  .preview{ width:100%; border-radius:12px; background:#eee; min-height:160px; display:block; margin-bottom:18px; }
+  .btn{
+    display:block; width:100%; padding:14px; margin-bottom:12px;
+    border:none; border-radius:14px; font-family:'Baloo 2', cursive; font-weight:700; font-size:16px;
+    cursor:pointer; text-decoration:none;
+  }
+  .btn.photo{ background:var(--olive); color:#fff; }
+  .btn.gif{ background:#fff; color:var(--ink); border:2px solid var(--olive); }
+  .btn[disabled], .btn.disabled{ opacity:.4; pointer-events:none; }
+  .status{ font-size:13px; color:#7a7062; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1 dir="rtl" lang="ar">صورك جاهزة</h1>
+  <h1 lang="en">Your Photos</h1>
+  <img class="preview" id="preview-img" alt="" style="display:none;">
+  <p class="status" id="status" dir="rtl" lang="ar">جارٍ التحميل…</p>
+  <p class="status" id="status-en" lang="en">Loading…</p>
+  <a class="btn photo disabled" id="btn-photo" download="photobooth-photo.jpg">Save Photo</a>
+  <a class="btn gif disabled" id="btn-gif" download="photobooth.gif">Save GIF</a>
+</div>
+
+<script>
+(function(){
+  const statusAr = document.getElementById('status');
+  const statusEn = document.getElementById('status-en');
+  function setStatus(ar, en){ statusAr.textContent = ar; statusEn.textContent = en; }
+
+  // Same account/preset as index.html. The QR only ever encodes the short
+  // session id (not a full Cloudinary URL) — a full URL makes for a very
+  // dense, hard-to-scan QR code at kiosk-screen size. index.html uploads
+  // with explicit public_id "<sessionId>-photo" / "<sessionId>-gif", so we
+  // can rebuild the exact same URLs here from just that id.
+  const CLOUDINARY_CLOUD_NAME = 'qjrijdok';
+  // matches what index.html actually generates (crypto.randomUUID(), or
+  // the Date.now()+random fallback) — anything else can't be a real
+  // session id, so there's no point even trying to build a URL from it
+  const SESSION_ID_PATTERN = /^[A-Za-z0-9-]{8,80}$/;
+
+  function cloudinaryUrl(publicId, ext){
+    return 'https://res.cloudinary.com/' + CLOUDINARY_CLOUD_NAME + '/image/upload/' + encodeURIComponent(publicId) + '.' + ext;
+  }
+
+  // forces a real download (with the right filename) instead of the browser
+  // just navigating to/previewing the image — works even though this page
+  // and the image are on different origins
+  function attachmentUrl(url){
+    return url.replace('/upload/', '/upload/fl_attachment/');
+  }
+
+  // resolves true/false — whether an <img> can actually load this URL —
+  // used to decide whether to offer the GIF button at all
+  function urlLoads(url){
+    return new Promise(resolve=>{
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+  }
+
+  const sessionId = new URLSearchParams(location.search).get('session');
+
+  if(!sessionId || !SESSION_ID_PATTERN.test(sessionId)){
+    setStatus('رابط غير صالح.', 'Invalid link.');
+    return;
+  }
+
+  const photoUrl = cloudinaryUrl(sessionId + '-photo', 'png');
+  const gifUrl = cloudinaryUrl(sessionId + '-gif', 'gif');
+
+  const img = document.getElementById('preview-img');
+  const btnPhoto = document.getElementById('btn-photo');
+
+  urlLoads(photoUrl).then(ok=>{
+    if(!ok){
+      setStatus('هذا الرابط منتهي أو غير موجود.', 'This link has expired or was not found.');
+      return;
+    }
+    img.src = photoUrl; img.style.display = 'block';
+    btnPhoto.href = attachmentUrl(photoUrl);
+    btnPhoto.classList.remove('disabled');
+    setStatus('اضغط لحفظ صورتك.', 'Tap below to save your photo.');
+
+    urlLoads(gifUrl).then(gifOk=>{
+      if(!gifOk) return; // GIF may not be ready/available — Save Photo still works
+      const btnGif = document.getElementById('btn-gif');
+      btnGif.href = attachmentUrl(gifUrl);
+      btnGif.classList.remove('disabled');
+      setStatus('اضغط لحفظ صورتك و GIF.', 'Tap below to save your photo and GIF.');
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
